@@ -36,7 +36,58 @@ pool.getConnection((err, conn) => {
 });
 
 /* =========================
-   ROTA TESTE
+   UTILITÁRIOS
+========================= */
+
+function limparTexto(valor) {
+  return String(valor || '').trim();
+}
+
+function hojeISO() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function validarDataISO(data) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(String(data || ''));
+}
+
+function validarHoraHHMM(hora) {
+  return /^([01]\d|2[0-3]):([0-5]\d)$/.test(String(hora || ''));
+}
+
+function gerarHorariosComerciais() {
+  const horarios = [];
+  for (let h = 8; h <= 16; h++) {
+    horarios.push(`${String(h).padStart(2, '0')}:00`);
+    horarios.push(`${String(h).padStart(2, '0')}:30`);
+  }
+  return horarios;
+}
+
+function proximoHorarioValidoHoje() {
+  const agora = new Date();
+  let hora = agora.getHours();
+  let minuto = agora.getMinutes();
+
+  if (minuto > 0 && minuto <= 30) {
+    minuto = 30;
+  } else if (minuto > 30) {
+    hora += 1;
+    minuto = 0;
+  } else {
+    minuto = 0;
+  }
+
+  return `${String(hora).padStart(2, '0')}:${String(minuto).padStart(2, '0')}`;
+}
+
+function responderErroBanco(res, err, mensagem) {
+  console.error(err);
+  return res.status(500).json({ erro: mensagem });
+}
+
+/* =========================
+   TESTE
 ========================= */
 
 app.get('/', (req, res) => {
@@ -48,7 +99,8 @@ app.get('/', (req, res) => {
 ========================= */
 
 app.post('/login', (req, res) => {
-  const { login, senha } = req.body;
+  const login = limparTexto(req.body.login);
+  const senha = limparTexto(req.body.senha);
 
   if (!login || !senha) {
     return res.status(400).json({ erro: "Login e senha obrigatórios" });
@@ -59,8 +111,7 @@ app.post('/login', (req, res) => {
     [login, senha],
     (err, results) => {
       if (err) {
-        console.error(err);
-        return res.status(500).json({ erro: "Erro no servidor" });
+        return responderErroBanco(res, err, "Erro no servidor");
       }
 
       if (results.length === 0) {
@@ -80,7 +131,9 @@ app.post('/login', (req, res) => {
 ========================= */
 
 app.post('/usuarios', (req, res) => {
-  const { nome, login, senha } = req.body;
+  const nome = limparTexto(req.body.nome);
+  const login = limparTexto(req.body.login);
+  const senha = limparTexto(req.body.senha);
 
   if (!nome || !login || !senha) {
     return res.status(400).json({ erro: "Preencha todos os campos" });
@@ -91,8 +144,7 @@ app.post('/usuarios', (req, res) => {
     [login],
     (err, results) => {
       if (err) {
-        console.error(err);
-        return res.status(500).json({ erro: "Erro ao verificar usuário" });
+        return responderErroBanco(res, err, "Erro ao verificar usuário");
       }
 
       if (results.length > 0) {
@@ -104,8 +156,7 @@ app.post('/usuarios', (req, res) => {
         [nome, login, senha, 'cliente'],
         (err2, result) => {
           if (err2) {
-            console.error(err2);
-            return res.status(500).json({ erro: "Erro ao cadastrar usuário" });
+            return responderErroBanco(res, err2, "Erro ao cadastrar usuário");
           }
 
           res.json({
@@ -120,9 +171,9 @@ app.post('/usuarios', (req, res) => {
 });
 
 app.get('/usuarios', (req, res) => {
-  const { tipo_usuario } = req.query;
+  const tipoUsuario = limparTexto(req.query.tipo_usuario);
 
-  if (tipo_usuario !== 'admin') {
+  if (tipoUsuario !== 'admin') {
     return res.status(403).json({ erro: "Apenas admin pode visualizar usuários" });
   }
 
@@ -132,8 +183,7 @@ app.get('/usuarios', (req, res) => {
      ORDER BY usuario_id DESC`,
     (err, results) => {
       if (err) {
-        console.error(err);
-        return res.status(500).json({ erro: "Erro ao buscar usuários" });
+        return responderErroBanco(res, err, "Erro ao buscar usuários");
       }
 
       res.json(results);
@@ -143,13 +193,14 @@ app.get('/usuarios', (req, res) => {
 
 app.delete('/usuarios/:id', (req, res) => {
   const { id } = req.params;
-  const { tipo_usuario, usuario_id } = req.body;
+  const tipoUsuario = limparTexto(req.body.tipo_usuario);
+  const usuarioId = Number(req.body.usuario_id);
 
-  if (tipo_usuario !== 'admin') {
+  if (tipoUsuario !== 'admin') {
     return res.status(403).json({ erro: "Apenas admin pode excluir usuários" });
   }
 
-  if (Number(usuario_id) === Number(id)) {
+  if (usuarioId === Number(id)) {
     return res.status(400).json({ erro: "Você não pode excluir seu próprio usuário" });
   }
 
@@ -158,17 +209,14 @@ app.delete('/usuarios/:id', (req, res) => {
     [id],
     (err, results) => {
       if (err) {
-        console.error(err);
-        return res.status(500).json({ erro: "Erro ao buscar usuário" });
+        return responderErroBanco(res, err, "Erro ao buscar usuário");
       }
 
       if (results.length === 0) {
         return res.status(404).json({ erro: "Usuário não encontrado" });
       }
 
-      const usuarioEncontrado = results[0];
-
-      if (usuarioEncontrado.tipo_usuario === 'admin') {
+      if (results[0].tipo_usuario === 'admin') {
         return res.status(403).json({ erro: "Não é permitido excluir outro administrador" });
       }
 
@@ -177,8 +225,7 @@ app.delete('/usuarios/:id', (req, res) => {
         [id],
         (err2) => {
           if (err2) {
-            console.error(err2);
-            return res.status(500).json({ erro: "Erro ao excluir usuário" });
+            return responderErroBanco(res, err2, "Erro ao excluir usuário");
           }
 
           res.json({ mensagem: "Usuário excluído com sucesso" });
@@ -199,8 +246,7 @@ app.get('/profissionais', (req, res) => {
      ORDER BY nome ASC`,
     (err, results) => {
       if (err) {
-        console.error(err);
-        return res.status(500).json({ erro: "Erro ao buscar profissionais" });
+        return responderErroBanco(res, err, "Erro ao buscar profissionais");
       }
 
       res.json(results);
@@ -209,9 +255,13 @@ app.get('/profissionais', (req, res) => {
 });
 
 app.post('/profissionais', (req, res) => {
-  const { nome, especialidade, telefone, status_profissional, tipo_usuario } = req.body;
+  const nome = limparTexto(req.body.nome);
+  const especialidade = limparTexto(req.body.especialidade);
+  const telefone = limparTexto(req.body.telefone);
+  const statusProfissional = limparTexto(req.body.status_profissional) || 'Ativo';
+  const tipoUsuario = limparTexto(req.body.tipo_usuario);
 
-  if (tipo_usuario !== 'admin') {
+  if (tipoUsuario !== 'admin') {
     return res.status(403).json({ erro: "Apenas admin pode cadastrar profissionais" });
   }
 
@@ -222,11 +272,10 @@ app.post('/profissionais', (req, res) => {
   pool.query(
     `INSERT INTO tbprofissionais (nome, especialidade, telefone, status_profissional)
      VALUES (?, ?, ?, ?)`,
-    [nome, especialidade, telefone || null, status_profissional || 'Ativo'],
+    [nome, especialidade, telefone || null, statusProfissional],
     (err, result) => {
       if (err) {
-        console.error(err);
-        return res.status(500).json({ erro: "Erro ao cadastrar profissional" });
+        return responderErroBanco(res, err, "Erro ao cadastrar profissional");
       }
 
       res.json({
@@ -239,9 +288,13 @@ app.post('/profissionais', (req, res) => {
 
 app.put('/profissionais/:id', (req, res) => {
   const { id } = req.params;
-  const { nome, especialidade, telefone, status_profissional, tipo_usuario } = req.body;
+  const nome = limparTexto(req.body.nome);
+  const especialidade = limparTexto(req.body.especialidade);
+  const telefone = limparTexto(req.body.telefone);
+  const statusProfissional = limparTexto(req.body.status_profissional) || 'Ativo';
+  const tipoUsuario = limparTexto(req.body.tipo_usuario);
 
-  if (tipo_usuario !== 'admin') {
+  if (tipoUsuario !== 'admin') {
     return res.status(403).json({ erro: "Apenas admin pode editar profissionais" });
   }
 
@@ -253,11 +306,10 @@ app.put('/profissionais/:id', (req, res) => {
     `UPDATE tbprofissionais
      SET nome = ?, especialidade = ?, telefone = ?, status_profissional = ?
      WHERE profissional_id = ?`,
-    [nome, especialidade, telefone || null, status_profissional || 'Ativo', id],
+    [nome, especialidade, telefone || null, statusProfissional, id],
     (err) => {
       if (err) {
-        console.error(err);
-        return res.status(500).json({ erro: "Erro ao atualizar profissional" });
+        return responderErroBanco(res, err, "Erro ao atualizar profissional");
       }
 
       res.json({ mensagem: "Profissional atualizado com sucesso" });
@@ -267,9 +319,9 @@ app.put('/profissionais/:id', (req, res) => {
 
 app.delete('/profissionais/:id', (req, res) => {
   const { id } = req.params;
-  const { tipo_usuario } = req.body;
+  const tipoUsuario = limparTexto(req.body.tipo_usuario);
 
-  if (tipo_usuario !== 'admin') {
+  if (tipoUsuario !== 'admin') {
     return res.status(403).json({ erro: "Apenas admin pode excluir profissionais" });
   }
 
@@ -278,8 +330,7 @@ app.delete('/profissionais/:id', (req, res) => {
     [id, 'Concluído'],
     (err, results) => {
       if (err) {
-        console.error(err);
-        return res.status(500).json({ erro: "Erro ao verificar profissional" });
+        return responderErroBanco(res, err, "Erro ao verificar profissional");
       }
 
       if (results.length > 0) {
@@ -291,8 +342,7 @@ app.delete('/profissionais/:id', (req, res) => {
         [id],
         (err2) => {
           if (err2) {
-            console.error(err2);
-            return res.status(500).json({ erro: "Erro ao excluir profissional" });
+            return responderErroBanco(res, err2, "Erro ao excluir profissional");
           }
 
           res.json({ mensagem: "Profissional excluído com sucesso" });
@@ -303,11 +353,59 @@ app.delete('/profissionais/:id', (req, res) => {
 });
 
 /* =========================
+   HORÁRIOS DISPONÍVEIS
+========================= */
+
+app.get('/profissionais/:id/horarios', (req, res) => {
+  const profissionalId = Number(req.params.id);
+  const data = limparTexto(req.query.data);
+  const ignorarChamadoId = req.query.ignorar_chamado_id ? Number(req.query.ignorar_chamado_id) : null;
+
+  if (!profissionalId || !validarDataISO(data)) {
+    return res.status(400).json({ erro: "Profissional e data são obrigatórios" });
+  }
+
+  const hoje = hojeISO();
+  if (data < hoje) {
+    return res.json([]);
+  }
+
+  pool.query(
+    `SELECT hora_agendada
+     FROM tbchamados
+     WHERE profissional_id = ?
+       AND data_agendada = ?
+       AND hora_agendada IS NOT NULL
+       AND status_chamado IN ('Aberto', 'Em andamento')
+       ${ignorarChamadoId ? 'AND chamado_id != ?' : ''}`,
+    ignorarChamadoId ? [profissionalId, data, ignorarChamadoId] : [profissionalId, data],
+    (err, results) => {
+      if (err) {
+        return responderErroBanco(res, err, "Erro ao buscar horários");
+      }
+
+      let horarios = gerarHorariosComerciais();
+
+      if (data === hoje) {
+        const minimoHoje = proximoHorarioValidoHoje();
+        horarios = horarios.filter(h => h >= minimoHoje);
+      }
+
+      const ocupados = results.map(r => r.hora_agendada).filter(Boolean);
+      const livres = horarios.filter(h => !ocupados.includes(h));
+
+      res.json(livres);
+    }
+  );
+});
+
+/* =========================
    CHAMADOS
 ========================= */
 
 app.get('/chamados', (req, res) => {
-  const { usuario_id, tipo_usuario } = req.query;
+  const usuarioId = req.query.usuario_id;
+  const tipoUsuario = limparTexto(req.query.tipo_usuario);
 
   const baseSql = `
     SELECT 
@@ -321,14 +419,13 @@ app.get('/chamados', (req, res) => {
     LEFT JOIN tbprofissionais p ON p.profissional_id = c.profissional_id
   `;
 
-  if (tipo_usuario === "cliente") {
+  if (tipoUsuario === "cliente") {
     pool.query(
       `${baseSql} WHERE c.usuario_id = ? ORDER BY c.chamado_id DESC`,
-      [usuario_id],
+      [usuarioId],
       (err, results) => {
         if (err) {
-          console.error(err);
-          return res.status(500).json({ erro: "Erro ao buscar chamados" });
+          return responderErroBanco(res, err, "Erro ao buscar chamados");
         }
         res.json(results);
       }
@@ -338,8 +435,7 @@ app.get('/chamados', (req, res) => {
       `${baseSql} ORDER BY c.chamado_id DESC`,
       (err, results) => {
         if (err) {
-          console.error(err);
-          return res.status(500).json({ erro: "Erro ao buscar chamados" });
+          return responderErroBanco(res, err, "Erro ao buscar chamados");
         }
         res.json(results);
       }
@@ -348,155 +444,171 @@ app.get('/chamados', (req, res) => {
 });
 
 app.post('/chamados', (req, res) => {
-  const {
-    titulo,
-    morador,
-    local_chamado,
-    descricao,
-    usuario_id,
-    profissional_id,
-    data_agendada,
-    observacao_servico,
-    prioridade,
-    categoria
-  } = req.body;
+  const titulo = limparTexto(req.body.titulo);
+  const localChamado = limparTexto(req.body.local_chamado);
+  const descricao = limparTexto(req.body.descricao);
+  const tipoUsuario = limparTexto(req.body.tipo_usuario);
+  const usuarioId = Number(req.body.usuario_id);
+  const categoria = limparTexto(req.body.categoria) || 'Geral';
+  const dataAgendada = req.body.data_agendada || null;
+  const horaAgendada = req.body.hora_agendada || null;
 
-  if (!titulo || !morador || !local_chamado || !usuario_id) {
+  if (!titulo || !localChamado || !usuarioId || !categoria) {
     return res.status(400).json({ erro: "Campos obrigatórios faltando" });
   }
 
-  const dataAbertura = new Date().toISOString().slice(0, 10);
+  const categoriasPermitidas = ['Elétrica', 'Hidráulica', 'Pintura', 'Estrutural', 'Geral'];
+  const prioridadesPermitidas = ['A definir', 'Baixa', 'Média', 'Alta'];
 
-  pool.query(
-    `INSERT INTO tbchamados 
-    (titulo, morador, local_chamado, status_chamado, descricao, usuario_id, profissional_id, data_agendada, observacao_servico, data_abertura, prioridade, categoria)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      titulo,
-      morador,
-      local_chamado,
-      'Aberto',
-      descricao || null,
-      usuario_id,
-      profissional_id || null,
-      data_agendada || null,
-      observacao_servico || null,
-      dataAbertura,
-      prioridade || "Média",
-      categoria || "Geral"
-    ],
-    (err, result) => {
-      if (err) {
-        console.error(err);
-        return res.status(500).json({ erro: "Erro ao criar chamado" });
-      }
-
-      res.json({
-        mensagem: "Chamado criado com sucesso",
-        id: result.insertId
-      });
-    }
-  );
-});
-
-app.put('/chamados/:id', (req, res) => {
-  const { id } = req.params;
-  const {
-    titulo,
-    morador,
-    local_chamado,
-    descricao,
-    status_chamado,
-    profissional_id,
-    data_agendada,
-    data_conclusao,
-    observacao_servico,
-    tipo_usuario,
-    prioridade,
-    categoria
-  } = req.body;
-
-  if (!titulo || !status_chamado) {
-    return res.status(400).json({ erro: "Campos obrigatórios faltando" });
+  if (!categoriasPermitidas.includes(categoria)) {
+    return res.status(400).json({ erro: "Categoria inválida" });
   }
 
-  const statusPermitidos = ["Aberto", "Em andamento", "Concluído"];
-  if (!statusPermitidos.includes(status_chamado)) {
-    return res.status(400).json({ erro: "Status inválido" });
+  if (dataAgendada && !validarDataISO(dataAgendada)) {
+    return res.status(400).json({ erro: "Data inválida" });
+  }
+
+  if (horaAgendada && !validarHoraHHMM(horaAgendada)) {
+    return res.status(400).json({ erro: "Horário inválido" });
+  }
+
+  if (dataAgendada && dataAgendada < hojeISO()) {
+    return res.status(400).json({ erro: "Não é permitido escolher data passada" });
   }
 
   pool.query(
-    'SELECT * FROM tbchamados WHERE chamado_id = ?',
-    [id],
-    (err, results) => {
+    'SELECT usuario_id, nome FROM tbusuarios WHERE usuario_id = ?',
+    [usuarioId],
+    (err, usuariosEncontrados) => {
       if (err) {
-        console.error(err);
-        return res.status(500).json({ erro: "Erro ao buscar chamado" });
+        return responderErroBanco(res, err, "Erro ao validar usuário");
       }
 
-      if (results.length === 0) {
-        return res.status(404).json({ erro: "Chamado não encontrado" });
+      if (usuariosEncontrados.length === 0) {
+        return res.status(404).json({ erro: "Usuário não encontrado" });
       }
 
-      const chamado = results[0];
+      const usuarioBanco = usuariosEncontrados[0];
 
-      if (tipo_usuario !== "admin") {
-        return res.status(403).json({ erro: "Apenas admin pode editar" });
+      const moradorFinal = tipoUsuario === 'admin'
+        ? (limparTexto(req.body.morador) || usuarioBanco.nome)
+        : usuarioBanco.nome;
+
+      const statusFinal = tipoUsuario === 'admin'
+        ? (limparTexto(req.body.status_chamado) || 'Aberto')
+        : 'Aberto';
+
+      const profissionalIdFinal = tipoUsuario === 'admin'
+        ? (req.body.profissional_id || null)
+        : null;
+
+      const prioridadeFinal = tipoUsuario === 'admin'
+        ? (limparTexto(req.body.prioridade) || 'Média')
+        : 'A definir';
+
+      const observacaoFinal = tipoUsuario === 'admin'
+        ? (limparTexto(req.body.observacao_servico) || null)
+        : null;
+
+      if (!prioridadesPermitidas.includes(prioridadeFinal)) {
+        return res.status(400).json({ erro: "Prioridade inválida" });
       }
 
-      if (chamado.status_chamado === "Concluído" || chamado.status_chamado === "Fechado") {
-        return res.status(403).json({ erro: "Chamados concluídos não podem ser editados" });
-      }
-
-      const conclusaoFinal =
-        status_chamado === "Concluído"
-          ? (data_conclusao || new Date().toISOString().slice(0, 10))
-          : null;
+      const dataAbertura = hojeISO();
 
       pool.query(
-        `UPDATE tbchamados
-         SET titulo = ?, morador = ?, local_chamado = ?, descricao = ?, status_chamado = ?,
-             profissional_id = ?, data_agendada = ?, data_conclusao = ?, observacao_servico = ?,
-             prioridade = ?, categoria = ?
-         WHERE chamado_id = ?`,
+        `INSERT INTO tbchamados 
+        (titulo, morador, local_chamado, status_chamado, descricao, usuario_id, profissional_id, data_agendada, hora_agendada, observacao_servico, data_abertura, prioridade, categoria)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           titulo,
-          morador || chamado.morador,
-          local_chamado || chamado.local_chamado,
+          moradorFinal,
+          localChamado,
+          statusFinal,
           descricao || null,
-          status_chamado,
-          profissional_id || null,
-          data_agendada || null,
-          conclusaoFinal,
-          observacao_servico || null,
-          prioridade || "Média",
-          categoria || "Geral",
-          id
+          usuarioId,
+          profissionalIdFinal,
+          dataAgendada,
+          horaAgendada,
+          observacaoFinal,
+          dataAbertura,
+          prioridadeFinal,
+          categoria
         ],
-        (err2) => {
+        (err2, result) => {
           if (err2) {
-            console.error(err2);
-            return res.status(500).json({ erro: "Erro ao atualizar" });
+            return responderErroBanco(res, err2, "Erro ao criar chamado");
           }
 
-          res.json({ mensagem: "Chamado atualizado com sucesso" });
+          res.json({
+            mensagem: "Chamado criado com sucesso",
+            id: result.insertId
+          });
         }
       );
     }
   );
 });
 
-app.delete('/chamados/:id', (req, res) => {
+app.put('/chamados/:id', (req, res) => {
   const { id } = req.params;
-  const { tipo_usuario } = req.body;
+  const tipoUsuario = limparTexto(req.body.tipo_usuario);
+
+  if (tipoUsuario !== "admin") {
+    return res.status(403).json({ erro: "Apenas admin pode editar" });
+  }
+
+  const titulo = limparTexto(req.body.titulo);
+  const morador = limparTexto(req.body.morador);
+  const localChamado = limparTexto(req.body.local_chamado);
+  const descricao = limparTexto(req.body.descricao);
+  const statusChamado = limparTexto(req.body.status_chamado);
+  const profissionalId = req.body.profissional_id || null;
+  const dataAgendada = req.body.data_agendada || null;
+  const horaAgendada = req.body.hora_agendada || null;
+  const dataConclusao = req.body.data_conclusao || null;
+  const observacaoServico = limparTexto(req.body.observacao_servico);
+  const prioridade = limparTexto(req.body.prioridade) || 'Média';
+  const categoria = limparTexto(req.body.categoria) || 'Geral';
+
+  if (!titulo || !morador || !localChamado || !statusChamado || !categoria) {
+    return res.status(400).json({ erro: "Campos obrigatórios faltando" });
+  }
+
+  const statusPermitidos = ['Aberto', 'Em andamento', 'Concluído'];
+  const categoriasPermitidas = ['Elétrica', 'Hidráulica', 'Pintura', 'Estrutural', 'Geral'];
+  const prioridadesPermitidas = ['A definir', 'Baixa', 'Média', 'Alta'];
+
+  if (!statusPermitidos.includes(statusChamado)) {
+    return res.status(400).json({ erro: "Status inválido" });
+  }
+
+  if (!categoriasPermitidas.includes(categoria)) {
+    return res.status(400).json({ erro: "Categoria inválida" });
+  }
+
+  if (!prioridadesPermitidas.includes(prioridade)) {
+    return res.status(400).json({ erro: "Prioridade inválida" });
+  }
+
+  if (dataAgendada && !validarDataISO(dataAgendada)) {
+    return res.status(400).json({ erro: "Data inválida" });
+  }
+
+  if (horaAgendada && !validarHoraHHMM(horaAgendada)) {
+    return res.status(400).json({ erro: "Horário inválido" });
+  }
+
+  if (dataAgendada && dataAgendada < hojeISO() && statusChamado !== 'Concluído') {
+    return res.status(400).json({ erro: "Não é permitido agendar data passada" });
+  }
 
   pool.query(
     'SELECT * FROM tbchamados WHERE chamado_id = ?',
     [id],
     (err, results) => {
       if (err) {
-        console.error(err);
-        return res.status(500).json({ erro: "Erro ao buscar chamado" });
+        return responderErroBanco(res, err, "Erro ao buscar chamado");
       }
 
       if (results.length === 0) {
@@ -505,7 +617,98 @@ app.delete('/chamados/:id', (req, res) => {
 
       const chamado = results[0];
 
-      if (tipo_usuario !== "admin") {
+      if (chamado.status_chamado === "Concluído" || chamado.status_chamado === "Fechado") {
+        return res.status(403).json({ erro: "Chamados concluídos não podem ser editados" });
+      }
+
+      const concluirData = statusChamado === 'Concluído'
+        ? (dataConclusao || hojeISO())
+        : null;
+
+      const verificarDisponibilidade = () => {
+        if (!profissionalId || !dataAgendada || !horaAgendada) {
+          return atualizarChamado();
+        }
+
+        pool.query(
+          `SELECT chamado_id
+           FROM tbchamados
+           WHERE profissional_id = ?
+             AND data_agendada = ?
+             AND hora_agendada = ?
+             AND status_chamado IN ('Aberto', 'Em andamento')
+             AND chamado_id != ?`,
+          [profissionalId, dataAgendada, horaAgendada, id],
+          (err2, conflito) => {
+            if (err2) {
+              return responderErroBanco(res, err2, "Erro ao validar agenda do profissional");
+            }
+
+            if (conflito.length > 0) {
+              return res.status(400).json({ erro: "Horário indisponível para este profissional" });
+            }
+
+            atualizarChamado();
+          }
+        );
+      };
+
+      const atualizarChamado = () => {
+        pool.query(
+          `UPDATE tbchamados
+           SET titulo = ?, morador = ?, local_chamado = ?, descricao = ?, status_chamado = ?,
+               profissional_id = ?, data_agendada = ?, hora_agendada = ?, data_conclusao = ?,
+               observacao_servico = ?, prioridade = ?, categoria = ?
+           WHERE chamado_id = ?`,
+          [
+            titulo,
+            morador,
+            localChamado,
+            descricao || null,
+            statusChamado,
+            profissionalId,
+            dataAgendada,
+            horaAgendada,
+            concluirData,
+            observacaoServico || null,
+            prioridade,
+            categoria,
+            id
+          ],
+          (err3) => {
+            if (err3) {
+              return responderErroBanco(res, err3, "Erro ao atualizar chamado");
+            }
+
+            res.json({ mensagem: "Chamado atualizado com sucesso" });
+          }
+        );
+      };
+
+      verificarDisponibilidade();
+    }
+  );
+});
+
+app.delete('/chamados/:id', (req, res) => {
+  const { id } = req.params;
+  const tipoUsuario = limparTexto(req.body.tipo_usuario);
+
+  pool.query(
+    'SELECT * FROM tbchamados WHERE chamado_id = ?',
+    [id],
+    (err, results) => {
+      if (err) {
+        return responderErroBanco(res, err, "Erro ao buscar chamado");
+      }
+
+      if (results.length === 0) {
+        return res.status(404).json({ erro: "Chamado não encontrado" });
+      }
+
+      const chamado = results[0];
+
+      if (tipoUsuario !== "admin") {
         return res.status(403).json({ erro: "Apenas admin pode excluir" });
       }
 
@@ -518,8 +721,7 @@ app.delete('/chamados/:id', (req, res) => {
         [id],
         (err2) => {
           if (err2) {
-            console.error(err2);
-            return res.status(500).json({ erro: "Erro ao excluir" });
+            return responderErroBanco(res, err2, "Erro ao excluir chamado");
           }
 
           res.json({ mensagem: "Chamado excluído com sucesso" });
