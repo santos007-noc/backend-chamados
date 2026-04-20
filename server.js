@@ -100,8 +100,8 @@ app.post('/usuarios', (req, res) => {
       }
 
       pool.query(
-        'INSERT INTO tbusuarios (nome, login, senha, tipo_usuario) VALUES (?, ?, ?, "cliente")',
-        [nome, login, senha],
+        'INSERT INTO tbusuarios (nome, login, senha, tipo_usuario) VALUES (?, ?, ?, ?)',
+        [nome, login, senha, 'cliente'],
         (err2, result) => {
           if (err2) {
             console.error(err2);
@@ -274,8 +274,8 @@ app.delete('/profissionais/:id', (req, res) => {
   }
 
   pool.query(
-    'SELECT * FROM tbchamados WHERE profissional_id = ? AND status_chamado != "Concluído"',
-    [id],
+    'SELECT * FROM tbchamados WHERE profissional_id = ? AND status_chamado != ?',
+    [id, 'Concluído'],
     (err, results) => {
       if (err) {
         console.error(err);
@@ -370,11 +370,12 @@ app.post('/chamados', (req, res) => {
   pool.query(
     `INSERT INTO tbchamados 
     (titulo, morador, local_chamado, status_chamado, descricao, usuario_id, profissional_id, data_agendada, observacao_servico, data_abertura, prioridade, categoria)
-    VALUES (?, ?, ?, "Aberto", ?, ?, ?, ?, ?, ?, ?, ?)`,
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       titulo,
       morador,
       local_chamado,
+      'Aberto',
       descricao || null,
       usuario_id,
       profissional_id || null,
