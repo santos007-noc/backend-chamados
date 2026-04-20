@@ -86,6 +86,16 @@ function responderErroBanco(res, err, mensagem) {
   return res.status(500).json({ erro: mensagem });
 }
 
+function formatarMorador(nome, apartamento) {
+  const nomeLimpo = limparTexto(nome);
+  const apartamentoLimpo = limparTexto(apartamento);
+
+  if (!nomeLimpo) return '';
+  if (!apartamentoLimpo) return nomeLimpo;
+
+  return `${nomeLimpo} - Apto ${apartamentoLimpo}`;
+}
+
 /* =========================
    TESTE
 ========================= */
@@ -107,7 +117,9 @@ app.post('/login', (req, res) => {
   }
 
   pool.query(
-    'SELECT usuario_id, nome, login, tipo_usuario FROM tbusuarios WHERE login = ? AND senha = ?',
+    `SELECT usuario_id, nome, login, tipo_usuario, apartamento
+     FROM tbusuarios
+     WHERE login = ? AND senha = ?`,
     [login, senha],
     (err, results) => {
       if (err) {
@@ -134,9 +146,10 @@ app.post('/usuarios', (req, res) => {
   const nome = limparTexto(req.body.nome);
   const login = limparTexto(req.body.login);
   const senha = limparTexto(req.body.senha);
+  const apartamento = limparTexto(req.body.apartamento);
 
   if (!nome || !login || !senha) {
-    return res.status(400).json({ erro: "Preencha todos os campos" });
+    return res.status(400).json({ erro: "Preencha todos os campos obrigatórios" });
   }
 
   pool.query(
@@ -152,8 +165,9 @@ app.post('/usuarios', (req, res) => {
       }
 
       pool.query(
-        'INSERT INTO tbusuarios (nome, login, senha, tipo_usuario) VALUES (?, ?, ?, ?)',
-        [nome, login, senha, 'cliente'],
+        `INSERT INTO tbusuarios (nome, login, senha, tipo_usuario, apartamento)
+         VALUES (?, ?, ?, ?, ?)`,
+        [nome, login, senha, 'cliente', apartamento || null],
         (err2, result) => {
           if (err2) {
             return responderErroBanco(res, err2, "Erro ao cadastrar usuário");
@@ -162,7 +176,8 @@ app.post('/usuarios', (req, res) => {
           res.json({
             mensagem: "Usuário criado com sucesso",
             id: result.insertId,
-            tipo_usuario: "cliente"
+            tipo_usuario: "cliente",
+            apartamento: apartamento || null
           });
         }
       );
@@ -178,7 +193,7 @@ app.get('/usuarios', (req, res) => {
   }
 
   pool.query(
-    `SELECT usuario_id, nome, login, tipo_usuario
+    `SELECT usuario_id, nome, login, tipo_usuario, apartamento
      FROM tbusuarios
      ORDER BY usuario_id DESC`,
     (err, results) => {
@@ -412,6 +427,7 @@ app.get('/chamados', (req, res) => {
       c.*,
       u.nome AS nome_usuario,
       u.login AS login_usuario,
+      u.apartamento AS apartamento_usuario,
       p.nome AS nome_profissional,
       p.especialidade AS especialidade_profissional
     FROM tbchamados c
@@ -477,7 +493,7 @@ app.post('/chamados', (req, res) => {
   }
 
   pool.query(
-    'SELECT usuario_id, nome FROM tbusuarios WHERE usuario_id = ?',
+    'SELECT usuario_id, nome, apartamento FROM tbusuarios WHERE usuario_id = ?',
     [usuarioId],
     (err, usuariosEncontrados) => {
       if (err) {
@@ -489,10 +505,11 @@ app.post('/chamados', (req, res) => {
       }
 
       const usuarioBanco = usuariosEncontrados[0];
+      const moradorPadrao = formatarMorador(usuarioBanco.nome, usuarioBanco.apartamento);
 
       const moradorFinal = tipoUsuario === 'admin'
-        ? (limparTexto(req.body.morador) || usuarioBanco.nome)
-        : usuarioBanco.nome;
+        ? (limparTexto(req.body.morador) || moradorPadrao)
+        : moradorPadrao;
 
       const statusFinal = tipoUsuario === 'admin'
         ? (limparTexto(req.body.status_chamado) || 'Aberto')
@@ -740,4 +757,3 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`🚀 Servidor rodando na porta ${PORT}`);
 });
-
