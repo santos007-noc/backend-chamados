@@ -206,6 +206,100 @@ app.get('/usuarios', (req, res) => {
   );
 });
 
+app.put('/usuarios/:id', (req, res) => {
+  const { id } = req.params;
+  const tipoUsuario = limparTexto(req.body.tipo_usuario);
+  const usuarioLogadoId = Number(req.body.usuario_logado_id);
+
+  const nome = limparTexto(req.body.nome);
+  const login = limparTexto(req.body.login);
+  const apartamento = limparTexto(req.body.apartamento);
+  const senha = limparTexto(req.body.senha);
+  const novoTipoUsuario = limparTexto(req.body.tipo_usuario_alvo);
+
+  if (tipoUsuario !== 'admin') {
+    return res.status(403).json({ erro: "Apenas admin pode editar usuários" });
+  }
+
+  if (!nome || !login) {
+    return res.status(400).json({ erro: "Nome e login são obrigatórios" });
+  }
+
+  if (nome.length > 120 || login.length > 120 || apartamento.length > 10 || senha.length > 120) {
+    return res.status(400).json({ erro: "Verifique o tamanho dos campos" });
+  }
+
+  pool.query(
+    'SELECT usuario_id, tipo_usuario FROM tbusuarios WHERE usuario_id = ?',
+    [id],
+    (err, results) => {
+      if (err) {
+        return responderErroBanco(res, err, "Erro ao buscar usuário");
+      }
+
+      if (results.length === 0) {
+        return res.status(404).json({ erro: "Usuário não encontrado" });
+      }
+
+      const usuarioAlvo = results[0];
+
+      if (
+        usuarioAlvo.tipo_usuario === 'admin' &&
+        usuarioLogadoId === Number(id) &&
+        novoTipoUsuario !== 'admin'
+      ) {
+        return res.status(400).json({ erro: "Você não pode remover seu próprio perfil de administrador" });
+      }
+
+      pool.query(
+        'SELECT usuario_id FROM tbusuarios WHERE login = ? AND usuario_id != ?',
+        [login, id],
+        (err2, usuariosMesmoLogin) => {
+          if (err2) {
+            return responderErroBanco(res, err2, "Erro ao validar login");
+          }
+
+          if (usuariosMesmoLogin.length > 0) {
+            return res.status(400).json({ erro: "Já existe outro usuário com esse login" });
+          }
+
+          const tipoFinal = novoTipoUsuario === 'admin' ? 'admin' : 'cliente';
+
+          if (senha) {
+            pool.query(
+              `UPDATE tbusuarios
+               SET nome = ?, login = ?, apartamento = ?, senha = ?, tipo_usuario = ?
+               WHERE usuario_id = ?`,
+              [nome, login, apartamento || null, senha, tipoFinal, id],
+              (err3) => {
+                if (err3) {
+                  return responderErroBanco(res, err3, "Erro ao atualizar usuário");
+                }
+
+                res.json({ mensagem: "Usuário atualizado com sucesso" });
+              }
+            );
+          } else {
+            pool.query(
+              `UPDATE tbusuarios
+               SET nome = ?, login = ?, apartamento = ?, tipo_usuario = ?
+               WHERE usuario_id = ?`,
+              [nome, login, apartamento || null, tipoFinal, id],
+              (err3) => {
+                if (err3) {
+                  return responderErroBanco(res, err3, "Erro ao atualizar usuário");
+                }
+
+                res.json({ mensagem: "Usuário atualizado com sucesso" });
+              }
+            );
+          }
+        }
+      );
+    }
+  );
+});
+
 app.delete('/usuarios/:id', (req, res) => {
   const { id } = req.params;
   const tipoUsuario = limparTexto(req.body.tipo_usuario);
